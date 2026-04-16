@@ -283,7 +283,7 @@
 <script>
     // ==================== KONFIGURASI ====================
     // URL APPS SCRIPT ANDA
-    const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzVh358r1nmkNzJbi4aVbg5Hc8zTFFWGjAT6NnPHrjoPNFqf8H8r0ZqHC_piAqLWZl-5w/exec';
+    const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbw7hmwqUx3A_5DPb8HyHsBbCDS7sjkoILwiA7NG7TI3hQfxlbOE6jwNlA4eKO8KLd3RcA/exec';
     
     // Kurs
     let kursData = { usd_to_idr: 16922 };
@@ -341,55 +341,64 @@
     
     // Fungsi cek duplikat paspor
     async function cekDuplikatPaspor(nomorPaspor, tanggalKedatangan, kantorRegistrasi) {
-        if (!nomorPaspor || nomorPaspor.length < 3) return;
+    if (!nomorPaspor || nomorPaspor.length < 3) return;
+    
+    const pasporStatus = document.getElementById('pasporStatus');
+    pasporStatus.style.display = 'block';
+    pasporStatus.className = 'paspor-status';
+    pasporStatus.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Memeriksa riwayat paspor...';
+    
+    try {
+        // Gunakan method GET untuk menghindari CORS
+        const url = `${WEBAPP_URL}?action=cekDuplikat&nomorPaspor=${encodeURIComponent(nomorPaspor)}`;
         
-        const pasporStatus = document.getElementById('pasporStatus');
-        pasporStatus.style.display = 'block';
-        pasporStatus.className = 'paspor-status';
-        pasporStatus.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Memeriksa riwayat paspor...';
+        console.log('Mengirim request ke:', url);
         
-        try {
-            const response = await fetchWithTimeout(WEBAPP_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'cekDuplikat',
-                    nomorPaspor: nomorPaspor,
-                    tanggalKedatangan: tanggalKedatangan,
-                    kantorRegistrasi: kantorRegistrasi
-                })
-            });
-            
-            const result = await response.json();
-            console.log('Response cek duplikat:', result);
-            
-            if (result.status === 'success') {
-                if (result.data && result.data.duplicate) {
-                    pasporStatus.className = 'paspor-status warning';
-                    pasporStatus.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${result.message || 'Paspor ini sudah pernah registrasi sebelumnya.'}`;
-                } else {
-                    pasporStatus.className = 'paspor-status success';
-                    pasporStatus.innerHTML = `<i class="fas fa-check-circle"></i> ${result.message || 'Paspor baru tercatat dalam sistem.'}`;
-                }
-            } else {
-                throw new Error(result.message || 'Gagal cek duplikat');
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            headers: {
+                'Accept': 'application/json'
             }
-            
-            // Sembunyikan setelah 5 detik
-            setTimeout(() => {
-                if (pasporStatus.className !== 'paspor-status error') {
-                    pasporStatus.style.display = 'none';
-                }
-            }, 5000);
-            
-        } catch(error) {
-            console.error('Error cek duplikat:', error);
-            pasporStatus.className = 'paspor-status error';
-            pasporStatus.innerHTML = `<i class="fas fa-times-circle"></i> Gagal koneksi ke server. Error: ${error.message}`;
-            setTimeout(() => {
-                pasporStatus.style.display = 'none';
-            }, 5000);
+        });
+        
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+        
+        const result = await response.json();
+        console.log('Response data:', result);
+        
+        if (result.status === 'success') {
+            if (result.data && result.data.duplicate) {
+                pasporStatus.className = 'paspor-status warning';
+                pasporStatus.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${result.message}`;
+            } else {
+                pasporStatus.className = 'paspor-status success';
+                pasporStatus.innerHTML = `<i class="fas fa-check-circle"></i> ${result.message}`;
+            }
+        } else {
+            throw new Error(result.message || 'Gagal cek duplikat');
+        }
+        
+        // Sembunyikan setelah 5 detik
+        setTimeout(() => {
+            pasporStatus.style.display = 'none';
+        }, 5000);
+        
+    } catch(error) {
+        console.error('Error detail:', error);
+        pasporStatus.className = 'paspor-status error';
+        pasporStatus.innerHTML = `<i class="fas fa-times-circle"></i> Gagal: ${error.message}`;
+        
+        // Jangan sembunyikan otomatis jika error
+        setTimeout(() => {
+            pasporStatus.style.display = 'none';
+        }, 8000);
     }
+}
     
     // Fetch kurs
     async function fetchKurs() {
