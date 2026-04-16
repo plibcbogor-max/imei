@@ -60,7 +60,6 @@
         .btn-bing { background: #008373; }
         .btn-imei { background: #e94560; }
         .btn-wa-full { background: #25D366; color: white; margin-top: 16px; }
-        .btn-pengguna { background: #10b981; }
         .checklist-item { border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; border-left: 3px solid; }
         .checklist-pass { border-left-color: #10b981; background: #f0fdf4; }
         .checklist-fail { border-left-color: #ef4444; background: #fef2f2; }
@@ -88,6 +87,7 @@
         .score-fill { background: #e94560; height: 100%; width: 0%; border-radius: 20px; transition: width 0.3s; }
         .prob-text { font-size: 1.2rem; font-weight: bold; margin-top: 8px; }
         .manual-harga { background: #f1f5f9; border-radius: 12px; padding: 12px; margin-top: 12px; }
+        .info-harga-bekas { background: #dbeafe; border-radius: 12px; padding: 10px; margin-top: 8px; font-size: 0.75rem; border-left: 3px solid #1e6f9f; }
         
         /* MODE PENGGUNA - menyembunyikan elemen risiko */
         body.pengguna-mode .risk-sensitive {
@@ -190,7 +190,13 @@
                 <div class="form-group"><label>Warna</label><input type="text" id="warnaHp" placeholder="Hitam"></div>
             </div>
             <div class="form-group"><label>Jumlah Perangkat</label><select id="jumlahPerangkat"><option value="1">1 Perangkat</option><option value="2">2 Perangkat</option><option value="3">3 Perangkat atau lebih</option></select></div>
-            <div class="form-group"><label>Harga Perangkat (USD) - sesuai invoice</label><input type="number" id="hargaUSD" placeholder="Harga dalam USD" value="500"></div>
+            
+            <!-- Harga Invoice (hanya untuk referensi, TIDAK untuk perhitungan pajak) -->
+            <div class="form-group">
+                <label>Harga Invoice (USD) - <span style="color:#e94560;">Hanya referensi</span></label>
+                <input type="number" id="hargaUSD" placeholder="Harga dalam USD" value="500">
+                <div class="small-note">*Tidak digunakan untuk perhitungan pajak. Dasar perhitungan adalah Harga Bekas di bawah.</div>
+            </div>
             
             <!-- IMEI 1 -->
             <div class="imei-item">
@@ -219,11 +225,12 @@
                 <button id="cariHargaBekasBtn" class="btn btn-bing"><i class="fab fa-microsoft"></i> Cek Harga (Bing)</button>
             </div>
             
-            <!-- Input manual untuk harga bekas -->
+            <!-- Input manual untuk harga bekas - INI YANG DIGUNAKAN UNTUK PERHITUNGAN PAJAK -->
             <div class="manual-harga">
-                <label><strong>📋 Harga Bekas (copas dari hasil pencarian)</strong></label>
+                <label><strong>💰 HARGA BEKAS (dasar perhitungan pajak)</strong></label>
                 <input type="text" id="manualHargaBekas" placeholder="Contoh: Rp 4.500.000 - Rp 5.500.000">
-                <div class="small-note">Copy paste estimasi harga bekas dari hasil pencarian Bing di atas</div>
+                <div class="small-note">⚠️ Copy paste estimasi harga bekas dari hasil pencarian Bing di atas. <strong>Ini adalah dasar perhitungan pungutan negara!</strong></div>
+                <div id="infoHargaBekasParsed" class="info-harga-bekas" style="display:none;"></div>
             </div>
         </div>
 
@@ -248,14 +255,14 @@
     <!-- RIGHT PANEL -->
     <div class="right-panel" id="rightPanel">
         <div id="defaultContent" class="default-content">
-            <!-- CARD 1: Checklist (beberapa item disembunyikan di mode pengguna) -->
+            <!-- CARD 1: Checklist -->
             <div class="card">
                 <div class="card-header"><i class="fas fa-check-double"></i> Status Kelengkapan Dokumen</div>
                 <div id="checklistContainer" class="alert-box">Klik "Jalankan Analisis Lengkap"</div>
                 <div id="alertContainer" class="risk-sensitive"></div>
             </div>
             
-            <!-- CARD 2: Analisis Risiko (risk sensitive - tersembunyi di mode pengguna) -->
+            <!-- CARD 2: Analisis Risiko (risk sensitive) -->
             <div class="card risk-sensitive">
                 <div class="card-header"><i class="fas fa-chart-pie"></i> Analisis Jastip & Probabilitas</div>
                 <div id="scoreContainer" class="alert-box">Belum dihitung</div>
@@ -263,14 +270,14 @@
                 <div id="probText" class="prob-text"></div>
             </div>
             
-            <!-- CARD 3: Perhitungan Pungutan Negara (ditampilkan di kedua mode) -->
+            <!-- CARD 3: Perhitungan Pungutan Negara (BERDASARKAN HARGA BEKAS) -->
             <div class="card">
                 <div class="card-header"><i class="fas fa-calculator"></i> Perhitungan Pungutan Negara</div>
                 <div id="hasilPajakContainer" class="hasil-pajak">Belum dihitung</div>
                 <div id="rangeContainer" class="range-box risk-sensitive"></div>
             </div>
             
-            <!-- CARD 4: Generate Pesan WhatsApp (ditampilkan di kedua mode) -->
+            <!-- CARD 4: Generate Pesan WhatsApp -->
             <div class="card">
                 <div class="card-header"><i class="fab fa-whatsapp"></i> Generate Pesan WhatsApp</div>
                 <textarea id="waMessage" rows="6" readonly style="width:100%; padding:12px; border-radius:12px; border:1px solid #cbd5e1; font-size:0.75rem; background:#f8fafc;"></textarea>
@@ -296,7 +303,7 @@
 
 <script>
     // ==================== MODE MANAGEMENT ====================
-    let currentMode = 'petugas'; // default: petugas
+    let currentMode = 'petugas';
     
     function setMode(mode) {
         currentMode = mode;
@@ -308,7 +315,6 @@
             body.classList.remove('pengguna-mode');
             btnText.innerText = 'Mode Pengguna Jasa';
             btnIcon.className = 'fas fa-user-friends';
-            // Tampilkan semua elemen risk-sensitive
             document.querySelectorAll('.risk-sensitive').forEach(el => {
                 el.style.display = '';
             });
@@ -316,13 +322,11 @@
             body.classList.add('pengguna-mode');
             btnText.innerText = 'Mode Petugas';
             btnIcon.className = 'fas fa-user-shield';
-            // Update tampilan untuk mode pengguna (hapus alert berbahaya)
             if (window.lastAnalisisData) {
                 updateTampilanPengguna(window.lastAnalisisData);
             }
         }
         
-        // Refresh tampilan dengan data terakhir jika ada
         if (window.lastAnalisisData) {
             if (mode === 'petugas') {
                 updateTampilanDefault(window.lastAnalisisData);
@@ -432,21 +436,47 @@
         
         if (!merk) { alert("Masukkan Merk terlebih dahulu"); return; }
         
-        let searchQuery = `${merk} ${tipe} ${ram} ${storage} ${tahun} harga bekas second`.trim();
+        let searchQuery = `${merk} ${tipe} ${storage}GB harga bekas`.trim();
         showIframeMode('Cek Harga Bekas', `https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}`);
     });
 
     function formatRupiah(angka) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka); }
     
+    // PARSING HARGA DARI STRING MANUAL - untuk mendapatkan nilai dalam Rupiah
     function parseHargaDariString(hargaStr) {
         if (!hargaStr) return null;
         const angka = hargaStr.match(/(\d+(?:[.,]\d+)*)/g);
         if (!angka || angka.length === 0) return null;
         let nilai = angka.map(a => parseFloat(a.replace(/\./g, '').replace(/,/g, '.'))).filter(v => !isNaN(v));
         if (nilai.length === 0) return null;
+        // Ambil nilai rata-rata jika ada range
         let rata = nilai.reduce((a,b) => a+b,0) / nilai.length;
         return rata;
     }
+    
+    // Mendapatkan harga bekas dalam Rupiah (dasar perhitungan pajak)
+    function getHargaBekasIDR() {
+        const manualHargaStr = document.getElementById("manualHargaBekas").value;
+        const hargaParsed = parseHargaDariString(manualHargaStr);
+        if (hargaParsed && hargaParsed > 0) {
+            return hargaParsed;
+        }
+        return null;
+    }
+    
+    // Update info harga yang diparsing
+    function updateInfoHargaParsed() {
+        const harga = getHargaBekasIDR();
+        const infoDiv = document.getElementById("infoHargaBekasParsed");
+        if (harga && harga > 0) {
+            infoDiv.style.display = "block";
+            infoDiv.innerHTML = `<i class="fas fa-check-circle"></i> Harga Bekas terdeteksi: ${formatRupiah(harga)}<br><small>Nilai ini akan digunakan sebagai dasar perhitungan pajak.</small>`;
+        } else {
+            infoDiv.style.display = "none";
+        }
+    }
+    
+    document.getElementById("manualHargaBekas").addEventListener("input", updateInfoHargaParsed);
 
     // ==================== HIGH RISK COUNTRY ====================
     const highRiskCountries = ["Singapura", "Hongkong", "Macau", "Amerika Serikat", "UAE", "Jepang", "Australia", "Korea"];
@@ -467,11 +497,12 @@
         const kantorReg = document.getElementById("kantorReg").value.trim();
         const hariLuar = parseInt(document.getElementById("hariLuarNegeri").value) || 7;
         const pekerjaan = document.getElementById("pekerjaan").value;
+        
+        // Harga invoice (hanya untuk perbandingan dengan harga bekas)
         const hargaUSDInput = parseFloat(document.getElementById("hargaUSD").value) || 0;
         const hargaIDRInput = hargaUSDInput * kursData.usd_to_idr;
+        const estimasiHargaBekasIDR = getHargaBekasIDR();
         
-        const manualHargaStr = document.getElementById("manualHargaBekas").value;
-        const estimasiHargaBekasIDR = parseHargaDariString(manualHargaStr);
         let isHargaLebihMurahDariBekas = false;
         if (estimasiHargaBekasIDR && estimasiHargaBekasIDR > 0 && hargaIDRInput > 0) {
             if (hargaIDRInput < estimasiHargaBekasIDR * 0.9) {
@@ -514,10 +545,11 @@
         const warna = document.getElementById("warnaHp").value || "-";
         const i1 = imeiData[1].imei || "-";
         const i2 = imeiData[2].imei || "-";
-        const harga = data.hargaIDR;
+        const hargaInvoice = data.hargaInvoiceIDR;
+        const hargaBekas = data.hargaBekasIDR;
+        const totalPajak = data.totalPajak;
         const statusReg = data.statusRegistrasi === "bandara" ? "✅ BANDARA (dapat pembebasan)" : "🌐 WEB (tidak dapat pembebasan)";
         const validasiStatus = data.tolak ? "❌ BELUM LENGKAP" : "✅ SESUAI";
-        const manualHarga = document.getElementById("manualHargaBekas").value || "Tidak ada data";
         
         const salam = new Date().getHours() < 12 ? "Selamat Pagi" : (new Date().getHours() < 18 ? "Selamat Siang" : "Selamat Sore");
         return `Assalamualaikum Wr wb. 
@@ -543,16 +575,17 @@ Sebagai ringkasan, data pihak yang melakukan registrasi IMEI meliputi:
 * Warna : ${warna}
 * IMEI 1 : ${i1}
 * IMEI 2 : ${i2}
-* Harga pengakuan : ${formatRupiah(harga)}
-* Estimasi Harga Bekas : ${manualHarga}
+* Harga Invoice : ${formatRupiah(hargaInvoice)}
+* Harga Pasar (Bekas) : ${formatRupiah(hargaBekas)}
+* Total Pungutan : ${formatRupiah(totalPajak)}
 
 Terima kasih atas perhatian Bapak/Ibu.`;
     }
 
-    // ==================== PAJAK ====================
-    function hitungPajak(hargaIDR, statusReg) {
+    // ==================== PAJAK (BERDASARKAN HARGA BEKAS) ====================
+    function hitungPajak(hargaBekasIDR, statusReg) {
         let pembebasan = statusReg === "bandara" ? 500 * kursData.usd_to_idr : 0;
-        let np = Math.max(0, hargaIDR - pembebasan);
+        let np = Math.max(0, hargaBekasIDR - pembebasan);
         let bea = Math.ceil(np * 0.1 / 1000) * 1000;
         let ppn = Math.ceil((np + bea) * 0.11 / 1000) * 1000;
         return { bea, ppn, total: bea + ppn, pembebasan, np };
@@ -568,8 +601,13 @@ Terima kasih atas perhatian Bapak/Ibu.`;
         const bayar = document.getElementById("membayar").value === "bersedia";
         const invoice = document.getElementById("invoice").value === "ada";
         const statusReg = document.getElementById("statusRegistrasi").value;
-        const hargaUSD = parseFloat(document.getElementById("hargaUSD").value) || 0;
-        const hargaIDR = hargaUSD * kursData.usd_to_idr;
+        
+        // HARGA INVOICE (hanya referensi)
+        const hargaUSDInvoice = parseFloat(document.getElementById("hargaUSD").value) || 0;
+        const hargaInvoiceIDR = hargaUSDInvoice * kursData.usd_to_idr;
+        
+        // HARGA BEKAS (DASAR PERHITUNGAN PAJAK)
+        const hargaBekasIDR = getHargaBekasIDR() || hargaInvoiceIDR; // fallback ke invoice jika tidak ada harga bekas
         
         let tolak = [];
         if (!qrAda) tolak.push("QR Code tidak ada");
@@ -578,6 +616,7 @@ Terima kasih atas perhatian Bapak/Ibu.`;
         if (!paspor) tolak.push("Paspor tidak ada");
         if (!bayar) tolak.push("Tidak bersedia bayar");
         if (imeiData[1].blacklisted || imeiData[2].blacklisted) tolak.push("IMEI Blacklist");
+        if (!getHargaBekasIDR()) tolak.push("Harga bekas belum diisi - wajib diisi untuk perhitungan pajak");
         
         let imeiManipulasi = false;
         if ((imeiData[1].valid && !imeiData[1].checked) || (imeiData[2].valid && !imeiData[2].checked)) {
@@ -585,9 +624,15 @@ Terima kasih atas perhatian Bapak/Ibu.`;
             tolak.push("IMEI tidak dicentang sesuai hasil cek - minta penumpang ubah data");
         }
         
-        const perhitungan = hitungPajak(hargaIDR, statusReg);
+        const perhitungan = hitungPajak(hargaBekasIDR, statusReg);
         const scoring = hitungScoring();
-        const waMsg = generateWAMessage({ hargaIDR, statusReg, tolak: tolak.length > 0 });
+        const waMsg = generateWAMessage({ 
+            hargaInvoiceIDR, 
+            hargaBekasIDR, 
+            totalPajak: perhitungan.total,
+            statusReg, 
+            tolak: tolak.length > 0 
+        });
         document.getElementById("waMessage").value = waMsg;
         
         return {
@@ -598,11 +643,18 @@ Terima kasih atas perhatian Bapak/Ibu.`;
                 { name: "Paspor Fisik", status: paspor ? "pass" : "fail" },
                 { name: "Kesediaan bayar", status: bayar ? "pass" : "fail" },
                 { name: "Invoice", status: invoice ? "pass" : "warning" },
+                { name: "Harga Bekas diisi", status: getHargaBekasIDR() ? "pass" : "fail" },
                 { name: "IMEI 1 sesuai", status: imeiData[1].valid && imeiData[1].checked ? "pass" : (imeiData[1].valid ? "warning" : "fail") },
                 { name: "IMEI 2 sesuai", status: imeiData[2].valid && imeiData[2].checked ? "pass" : (imeiData[2].valid ? "warning" : "fail") }
             ],
-            tolak: tolak.length > 0, daftarTolak: tolak, perhitungan: perhitungan, scoring: scoring,
-            hargaUSD: hargaUSD, hargaIDR: hargaIDR, imeiManipulasi: imeiManipulasi
+            tolak: tolak.length > 0, 
+            daftarTolak: tolak, 
+            perhitungan: perhitungan, 
+            scoring: scoring,
+            hargaInvoiceUSD: hargaUSDInvoice,
+            hargaInvoiceIDR: hargaInvoiceIDR,
+            hargaBekasIDR: hargaBekasIDR,
+            imeiManipulasi: imeiManipulasi
         };
     }
     
@@ -639,23 +691,26 @@ Terima kasih atas perhatian Bapak/Ibu.`;
             elabBox.classList.remove("show");
         }
         
-        // Pajak
+        // Pajak - menampilkan perbandingan harga invoice vs harga bekas
         const p = data.perhitungan;
         document.getElementById("hasilPajakContainer").innerHTML = `
             <table style="width:100%">
-                <tr><td>Harga (USD)</td><td>USD ${data.hargaUSD.toLocaleString()}</td></tr>
-                <tr><td>Harga (IDR)</td><td>${formatRupiah(data.hargaIDR)}</td></tr>
-                <tr><td>Pembebasan</td><td>${p.pembebasan > 0 ? formatRupiah(p.pembebasan) : 'TIDAK DAPAT'}</td></tr>
+                <tr style="border-bottom:1px solid #334155;"><td colspan="2"><strong>📋 DATA HARGA</strong></td></tr>
+                <tr><td>Harga Invoice (Referensi)</td><td>${formatRupiah(data.hargaInvoiceIDR)}</td></tr>
+                <tr style="border-bottom:1px solid #334155;"><td><strong>💰 Harga Bekas (Dasar Pajak)</strong></td><td><strong>${formatRupiah(data.hargaBekasIDR)}</strong></td></tr>
+                <tr style="border-bottom:1px solid #334155;"><td colspan="2"><strong>📊 PERHITUNGAN PUNGUTAN</strong></td></tr>
+                <tr><td>Pembebasan (USD 500)</td><td>${p.pembebasan > 0 ? formatRupiah(p.pembebasan) : 'TIDAK DAPAT'}</td></tr>
+                <tr><td>Nilai Pungut (NP)</td><td>${formatRupiah(p.np)}</td></tr>
                 <tr><td>Bea Masuk (10%)</td><td>${formatRupiah(p.bea)}</td></tr>
                 <tr><td>PPN (11%)</td><td>${formatRupiah(p.ppn)}</td></tr>
-                <tr style="border-top:2px solid #facc15;"><td><strong>TOTAL</strong></td><td><strong>${formatRupiah(p.total)}</strong></td></tr>
+                <tr style="border-top:2px solid #facc15;"><td><strong>TOTAL PUNGUTAN</strong></td><td><strong>${formatRupiah(p.total)}</strong></td></tr>
             </table>`;
         document.getElementById("rangeContainer").innerHTML = `📊 Perkiraan Kisaran Total Pajak (plus minus 10%): ${formatRupiah(p.total*0.9)} ← ${formatRupiah(p.total)} → ${formatRupiah(p.total*1.1)}`;
     }
     
     // ==================== TAMPILAN MODE PENGGUNA (AMAN) ====================
     function updateTampilanPengguna(data) {
-        // Checklist - HANYA yang status PASS yang ditampilkan
+        // Checklist - HANYA yang status PASS
         let chk = '';
         const onlyPass = data.checklist.filter(i => i.status === 'pass');
         if (onlyPass.length === data.checklist.length) {
@@ -667,24 +722,18 @@ Terima kasih atas perhatian Bapak/Ibu.`;
             }
         }
         document.getElementById("checklistContainer").innerHTML = chk;
-        
-        // Tidak menampilkan alert berbahaya di mode pengguna
         document.getElementById("alertContainer").innerHTML = '';
         
-        // Sembunyikan scoring dan elaboration box (sudah lewat CSS)
-        
-        // Pajak - tetap ditampilkan
+        // Pajak - tampilkan perhitungan bersih tanpa alert
         const p = data.perhitungan;
         document.getElementById("hasilPajakContainer").innerHTML = `
             <table style="width:100%">
-                <tr><td>Harga Perangkat (USD)</td><td>USD ${data.hargaUSD.toLocaleString()}</td></tr>
-                <tr><td>Nilai Pabean (IDR)</td><td>${formatRupiah(data.hargaIDR)}</td></tr>
-                <tr><td>Pembebasan</td><td>${p.pembebasan > 0 ? formatRupiah(p.pembebasan) : 'TIDAK DAPAT'}</td></tr>
+                <tr><td><strong>Dasar Perhitungan (Harga Pasar)</strong></td><td><strong>${formatRupiah(data.hargaBekasIDR)}</strong></td></tr>
+                <tr><td>Pembebasan (USD 500)</td><td>${p.pembebasan > 0 ? formatRupiah(p.pembebasan) : 'TIDAK DAPAT'}</td></tr>
                 <tr><td>Bea Masuk (10%)</td><td>${formatRupiah(p.bea)}</td></tr>
                 <tr><td>PPN (11%)</td><td>${formatRupiah(p.ppn)}</td></tr>
                 <tr style="border-top:2px solid #facc15;"><td><strong>TOTAL PUNGUTAN</strong></td><td><strong>${formatRupiah(p.total)}</strong></td></tr>
             </table>`;
-        // Range box disembunyikan via CSS
     }
     
     // ==================== EVENT ANALISIS ====================
@@ -692,6 +741,10 @@ Terima kasih atas perhatian Bapak/Ibu.`;
         const i1 = document.getElementById("imei1").value, i2 = document.getElementById("imei2").value;
         if (i1 && !imeiData[1].valid) await cekIMEIOnline(i1, 1);
         if (i2 && !imeiData[2].valid) await cekIMEIOnline(i2, 2);
+        
+        // Update info harga yang diparsing
+        updateInfoHargaParsed();
+        
         const data = generateAnalisis();
         window.lastAnalisisData = data;
         
@@ -709,7 +762,9 @@ Terima kasih atas perhatian Bapak/Ibu.`;
         alert("✅ Pesan WhatsApp disalin ke clipboard!");
     });
     
+    // Inisialisasi
     showDefaultMode();
+    updateInfoHargaParsed();
 </script>
 </body>
 </html>
