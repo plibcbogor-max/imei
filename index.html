@@ -436,7 +436,7 @@
         
         if (!merk) { alert("Masukkan Merk terlebih dahulu"); return; }
         
-        let searchQuery = `${merk} ${tipe} ${storage}GB harga bekas`.trim();
+        let searchQuery = `harga bekas ${merk} ${tipe} ${storage}GB`.trim();
         showIframeMode('Cek Harga Bekas', `https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}`);
     });
 
